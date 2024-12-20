@@ -9,19 +9,20 @@ load_dotenv()
 from transformers import GPT2Tokenizer
 # Initialize the tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+import time
 
 # Constants
 OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
 EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
-RAG_MODEL = "llama3.2-vision:11b-instruct-q8_0"
+RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
 AUTH_HEADER = f"Bearer {os.getenv('API_KEY')}"
 OLLAMA_HEADERS = {
     'Authorization': AUTH_HEADER,
     'Content-Type': 'application/json',
     'Accept': 'application/json',
 }
-SYSTEM_PROMPT = "You are an AI assistant that provides concise responses to user questions. You don't explain your answers or your process of thougt, you just answer the question directly."
-CONTEXT_WINDOW = 4096
+SYSTEM_PROMPT = "You are an AI assistant that provides concise responses to user questions. You don't explain your answers or your process of thought, you just answer the question directly. When you don't know the answer, you just respond with an empty string."
+CONTEXT_WINDOW = 2048
 PROMPT_OPTIONS = {"temperature": 0.1, "num_ctx": CONTEXT_WINDOW}
 VECTOR_DB_PATH = "./lance_db"
 FORCE_REBUILD = False  # Set to True to rebuild the vector store from scratch
@@ -45,6 +46,7 @@ def get_embedding(text):
 
 
 def run_prompt(prompt, label="generic"):
+  start_time = time.time()
   if (DEBUG):
     print(f"Running {label} prompt ...")
   # Ensure the prompt fits within the context window
@@ -63,19 +65,20 @@ def run_prompt(prompt, label="generic"):
   response = requests.post(f"{OLLAMA_API_URL}/api/generate", json=data, headers=OLLAMA_HEADERS)
   response.raise_for_status()
   answer = response.json()['response'].strip()
+  end_time = time.time()  # End timer
   if (DEBUG):
-    print(answer)
+    print(answer + f"\nprocessed in {end_time - start_time:.1f}s")
   return answer
 
 
 def get_title(text):
-  title_prompt = f"Please infer an appropriate title for a piece of text. Do not explain your answer. Only respond with your best title. Here follows the text:\n\n{text}"
+  title_prompt = f"Please infer an appropriate title for a piece of text. You should only output the title. Here follows the text:\n\n{text}"
   title = run_prompt(title_prompt, "title")
   return title
 
 
 def get_summary(text):
-  summary_prompt = f"Please summarize a piece of text in 50 words or less and do not explain your answer. Only respond with your best summary. Here follows the text:\n\n{text}"
+  summary_prompt = f"Please summarize a piece of text in 50 words or less and do not explain your answer. You should only output the summary. Here follows the text:\n\n{text}"
   summary = run_prompt(summary_prompt, "summary")
   return summary
 
