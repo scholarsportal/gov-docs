@@ -1,0 +1,4 @@
+lancedb
+ollama
+pandas
+python-dotenv
