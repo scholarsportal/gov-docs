@@ -1,6 +1,5 @@
 import os
 import json
-import requests
 from pathlib import Path
 import lancedb
 from dotenv import load_dotenv
@@ -11,24 +10,27 @@ from transformers import GPT2Tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 import time
 from pydantic import BaseModel
+from ollama import Client
 
 # Constants
 OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
 EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
-RAG_MODEL = "llama3.2-vision:11b-instruct-q8_0"
+RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
 AUTH_HEADER = f"Bearer {os.getenv('API_KEY')}"
 OLLAMA_HEADERS = {
-    'Authorization': AUTH_HEADER,
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    "Authorization": AUTH_HEADER
 }
-SYSTEM_PROMPT = "You are an AI assistant that provides concise responses to user questions. You don't explain your answers or your process of thought, you just answer the question directly. When you don't know the answer, you just respond with an empty string."
 CONTEXT_WINDOW = 4096
-PROMPT_OPTIONS = {"temperature": 0.0, "num_ctx": CONTEXT_WINDOW}
+PROMPT_OPTIONS = {"temperature": 0.1, "num_ctx": CONTEXT_WINDOW}
 VECTOR_DB_PATH = "./lance_db"
 FORCE_REBUILD = False  # Set to True to rebuild the vector store from scratch
 DEBUG = False
 
+# Initialize Ollama client
+ollama = Client(
+    host=OLLAMA_API_URL,
+    headers=OLLAMA_HEADERS,
+)
 # Initialize LanceDB
 vector_db = lancedb.connect(VECTOR_DB_PATH)
 if "documents" not in vector_db.table_names():
@@ -40,33 +42,26 @@ else:
 
 
 def get_embedding(text):
-  data = {"model": EMBEDDING_MODEL, "input": text}
-  response = requests.post(f"{OLLAMA_API_URL}/api/embed", json=data, headers=OLLAMA_HEADERS)
-  response.raise_for_status()
-  return response.json()['embeddings']
+  response = ollama.embed(model=EMBEDDING_MODEL, input=text)
+  return response['embeddings']
 
 
-def run_prompt(prompt, label="generic", format=None):
+def run_prompt(prompt, label="generic", format:dict[str, any]=None):
   start_time = time.time()
   if (DEBUG):
     print(f"Running {label} prompt ...")
   # Ensure the prompt fits within the context window
-  response_token_limit = 200  # Limit response tokens to avoid exceeding the context window
+  response_token_limit = 150  # Limit response tokens to avoid exceeding the context window
   max_prompt_tokens = CONTEXT_WINDOW - response_token_limit
   # Tokenize the prompt with truncation to fit within the token limit
   tokens = tokenizer.encode(prompt, truncation=True, max_length=max_prompt_tokens)
   prompt = tokenizer.decode(tokens, clean_up_tokenization_spaces=True)
-  data = {
-      "model": RAG_MODEL,
-      "prompt": prompt,
-      "stream": "false",
-      "system": SYSTEM_PROMPT,
-      "format": json.dumps(format) if format else None,
-      "options": PROMPT_OPTIONS
-  }
-  response = requests.post(f"{OLLAMA_API_URL}/api/generate", json=data, headers=OLLAMA_HEADERS)
-  response.raise_for_status()
-  answer = response.json()['response'].strip()
+  response = ollama.generate(model=RAG_MODEL,
+                             prompt=prompt,
+                             stream=False,
+                             options=PROMPT_OPTIONS,
+                             format="json") # change to format whe ollama client adds support
+  answer = response['response'].strip()
   end_time = time.time()  # End timer
   if (DEBUG):
     print(answer + f"\n** {end_time - start_time:.1f}s")
@@ -74,6 +69,7 @@ def run_prompt(prompt, label="generic", format=None):
 
 
 def get_metadata(text):
+
   class MetaInfo(BaseModel):
     title: str
     summary: str
@@ -89,6 +85,7 @@ def get_metadata(text):
     ISSN: str
     ISBN: str
     language: list[str]
+
   format = MetaInfo.model_json_schema()
   metadata_prompt = f"Please extract the following information from a document: 1.) title, 2.) summary, 3.) level_of_government, 4.) responsible_province, 5.) responsible_city, 6.) authors, 7.) editors 8.) publisher, 9.) publish_date, 10.) publisher_location, 11.) copyright_year, 12.) ISSN, 13.) ISBN, 14.) language. If the exact title of the document is obvious in the text, then use that, alternatively the title should be your most releveant suggestion for the document and also be less than 8 words. The summary should be concise but still representative of the content of the text and also less than 50 words. Level of government is one of three options: 'federal', 'provincial', or 'municipal'. If the level of government is federal, the responsible province should be Ontario. Federal documents are Ottawa's responsibility. And provincial documents are the responsibility of the capital city of the responsible_province. Municipal documents are the responsibility of that city. The publish date should be converted to yyyy-mm-dd format. Language should be one or both of these options: 'en', 'fr'. You should output the information as JSON. Here follows the available document text:\n\n{text}"
   metadata = run_prompt(metadata_prompt, "metadata", format)
