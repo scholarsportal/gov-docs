@@ -45,7 +45,7 @@ def get_embedding(text):
   return response.json()['embeddings']
 
 
-def run_prompt(prompt, label="generic"):
+def run_prompt(prompt, label="generic", format=None):
   start_time = time.time()
   if (DEBUG):
     print(f"Running {label} prompt ...")
@@ -60,6 +60,7 @@ def run_prompt(prompt, label="generic"):
       "prompt": prompt,
       "stream": "false",
       "system": SYSTEM_PROMPT,
+      "format": "json",
       "options": PROMPT_OPTIONS
   }
   response = requests.post(f"{OLLAMA_API_URL}/api/generate", json=data, headers=OLLAMA_HEADERS)
@@ -67,13 +68,34 @@ def run_prompt(prompt, label="generic"):
   answer = response.json()['response'].strip()
   end_time = time.time()  # End timer
   if (DEBUG):
-    print(answer + f"\nprocessed in {end_time - start_time:.1f}s")
+    print(answer + f"\n** processed in {end_time - start_time:.1f}s **")
   return answer
+
+
+def get_metadata(text):
+  metadata_prompt = f"Please extract the following information from a piece of text: 1.) Title, 2.) Summary. The title should be less than 8 words and the summary should be less than 50 words. You should only output the information as JSON. Here follows the text:\n\n{text}"
+  format = {
+      "type": "object",
+      "properties": {
+          "title": {
+              "type": "string"
+          },
+          "summary": {
+              "type": "string"
+          }
+      },
+      "required": ["title", "summary"]
+  }
+  metadata = run_prompt(metadata_prompt, "metadata", format)
+  return metadata
 
 
 def get_title(text):
   title_prompt = f"Please infer an appropriate title for a piece of text. You should only output the title. Here follows the text:\n\n{text}"
   title = run_prompt(title_prompt, "title")
+  # remove leading and trailing quotes from title if they exist
+  if (title[0] == '"'):
+    title = title[1:-1]
   return title
 
 
@@ -112,9 +134,11 @@ def generate_metadata(files):
     print(f"Processing {filename}...")
     with file.open('r', encoding='utf-8') as f:
       text = f.read()
-    title = get_title(text)
-    summary = get_summary(text)
-    metadata[filename] = {"title": title, "summary": summary}
+    # title = get_title(text)
+    # summary = get_summary(text)
+    # metadata[filename] = {"title": title, "summary": summary}
+      json_text = get_metadata(text)
+      metadata[filename] = json.loads(json_text)
   # Save to metadata.json
   with open("metadata.json", 'w', encoding='utf-8') as f:
     json.dump(metadata, f, ensure_ascii=False, indent=2)
