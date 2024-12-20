@@ -10,11 +10,12 @@ from transformers import GPT2Tokenizer
 # Initialize the tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 import time
+from pydantic import BaseModel
 
 # Constants
 OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
 EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
-RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
+RAG_MODEL = "llama3.2-vision:11b-instruct-q8_0"
 AUTH_HEADER = f"Bearer {os.getenv('API_KEY')}"
 OLLAMA_HEADERS = {
     'Authorization': AUTH_HEADER,
@@ -22,8 +23,8 @@ OLLAMA_HEADERS = {
     'Accept': 'application/json',
 }
 SYSTEM_PROMPT = "You are an AI assistant that provides concise responses to user questions. You don't explain your answers or your process of thought, you just answer the question directly. When you don't know the answer, you just respond with an empty string."
-CONTEXT_WINDOW = 2048
-PROMPT_OPTIONS = {"temperature": 0.1, "num_ctx": CONTEXT_WINDOW}
+CONTEXT_WINDOW = 4096
+PROMPT_OPTIONS = {"temperature": 0.0, "num_ctx": CONTEXT_WINDOW}
 VECTOR_DB_PATH = "./lance_db"
 FORCE_REBUILD = False  # Set to True to rebuild the vector store from scratch
 DEBUG = False
@@ -50,7 +51,7 @@ def run_prompt(prompt, label="generic", format=None):
   if (DEBUG):
     print(f"Running {label} prompt ...")
   # Ensure the prompt fits within the context window
-  response_token_limit = 100  # Limit response tokens to avoid exceeding the context window
+  response_token_limit = 200  # Limit response tokens to avoid exceeding the context window
   max_prompt_tokens = CONTEXT_WINDOW - response_token_limit
   # Tokenize the prompt with truncation to fit within the token limit
   tokens = tokenizer.encode(prompt, truncation=True, max_length=max_prompt_tokens)
@@ -60,7 +61,7 @@ def run_prompt(prompt, label="generic", format=None):
       "prompt": prompt,
       "stream": "false",
       "system": SYSTEM_PROMPT,
-      "format": "json", #json.dumps(format) if format else None,
+      "format": json.dumps(format) if format else None,
       "options": PROMPT_OPTIONS
   }
   response = requests.post(f"{OLLAMA_API_URL}/api/generate", json=data, headers=OLLAMA_HEADERS)
@@ -68,33 +69,28 @@ def run_prompt(prompt, label="generic", format=None):
   answer = response.json()['response'].strip()
   end_time = time.time()  # End timer
   if (DEBUG):
-    print(answer + f"\n** processed in {end_time - start_time:.1f}s **")
+    print(answer + f"\n** {end_time - start_time:.1f}s")
   return answer
 
 
 def get_metadata(text):
-  metadata_prompt = f"Please extract the following information from a document: 1.) title, 2.) summary, 3.) jurisdiction, 4.) responsible_province, 5.) responsible_city. The title should be your most releveant suggestion and also be less than 8 words. The summary should be concise but still representative of the content of the text and also less than 50 words. Jurisdiction is one of three options: federal, provincial, or municipal. If the jurisdiction is federal, the responsible province should be Ontario. Federal documents are Ottawa's responsibility. And provincial documents are the responsibility of the capital city of the responsible_province. Municipal documents are the responsibility of that city. You should only output the information as JSON. Here follows the document text:\n\n{text}"
-  format = {
-      "type": "object",
-      "properties": {
-          "title": {
-              "type": "string"
-          },
-          "summary": {
-              "type": "string"
-          },
-          "jurisdiction": {
-              "type": "string"
-          },
-          "responsible_province": {
-              "type": "string"
-          },
-          "responsible_city": {
-              "type": "string"
-          }
-      },
-      "required": ["title", "summary", "jurisdiction", "responsible_province", "responsible_city"]
-  }
+  class MetaInfo(BaseModel):
+    title: str
+    summary: str
+    level_of_government: str
+    responsible_province: str
+    responsible_city: str
+    authors: list[str]
+    editors: list[str]
+    publisher: str
+    publish_date: str
+    publisher_location: str
+    copyright_year: int
+    ISSN: str
+    ISBN: str
+    language: list[str]
+  format = MetaInfo.model_json_schema()
+  metadata_prompt = f"Please extract the following information from a document: 1.) title, 2.) summary, 3.) level_of_government, 4.) responsible_province, 5.) responsible_city, 6.) authors, 7.) editors 8.) publisher, 9.) publish_date, 10.) publisher_location, 11.) copyright_year, 12.) ISSN, 13.) ISBN, 14.) language. If the exact title of the document is obvious in the text, then use that, alternatively the title should be your most releveant suggestion for the document and also be less than 8 words. The summary should be concise but still representative of the content of the text and also less than 50 words. Level of government is one of three options: 'federal', 'provincial', or 'municipal'. If the level of government is federal, the responsible province should be Ontario. Federal documents are Ottawa's responsibility. And provincial documents are the responsibility of the capital city of the responsible_province. Municipal documents are the responsibility of that city. The publish date should be converted to yyyy-mm-dd format. Language should be one or both of these options: 'en', 'fr'. You should output the information as JSON. Here follows the available document text:\n\n{text}"
   metadata = run_prompt(metadata_prompt, "metadata", format)
   return metadata
 
