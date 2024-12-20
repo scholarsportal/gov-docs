@@ -1,11 +1,10 @@
 __pycache__/
 
 .env
-.venv
-env/
 venv/
 
 input/*
 !input/.gitkeep
 
 lance_db/
+metadata.json

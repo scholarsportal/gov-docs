@@ -2,3 +2,4 @@ lancedb
 ollama
 pandas
 python-dotenv
+transformers
