@@ -60,7 +60,7 @@ def run_prompt(prompt, label="generic", format=None):
       "prompt": prompt,
       "stream": "false",
       "system": SYSTEM_PROMPT,
-      "format": "json",
+      "format": "json", #json.dumps(format) if format else None,
       "options": PROMPT_OPTIONS
   }
   response = requests.post(f"{OLLAMA_API_URL}/api/generate", json=data, headers=OLLAMA_HEADERS)
@@ -73,7 +73,7 @@ def run_prompt(prompt, label="generic", format=None):
 
 
 def get_metadata(text):
-  metadata_prompt = f"Please extract the following information from a piece of text: 1.) Title, 2.) Summary. The title should be less than 8 words and the summary should be less than 50 words. You should only output the information as JSON. Here follows the text:\n\n{text}"
+  metadata_prompt = f"Please extract the following information from a document: 1.) title, 2.) summary, 3.) jurisdiction, 4.) responsible_province, 5.) responsible_city. The title should be your most releveant suggestion and also be less than 8 words. The summary should be concise but still representative of the content of the text and also less than 50 words. Jurisdiction is one of three options: federal, provincial, or municipal. If the jurisdiction is federal, the responsible province should be Ontario. Federal documents are Ottawa's responsibility. And provincial documents are the responsibility of the capital city of the responsible_province. Municipal documents are the responsibility of that city. You should only output the information as JSON. Here follows the document text:\n\n{text}"
   format = {
       "type": "object",
       "properties": {
@@ -82,9 +82,18 @@ def get_metadata(text):
           },
           "summary": {
               "type": "string"
+          },
+          "jurisdiction": {
+              "type": "string"
+          },
+          "responsible_province": {
+              "type": "string"
+          },
+          "responsible_city": {
+              "type": "string"
           }
       },
-      "required": ["title", "summary"]
+      "required": ["title", "summary", "jurisdiction", "responsible_province", "responsible_city"]
   }
   metadata = run_prompt(metadata_prompt, "metadata", format)
   return metadata
@@ -134,9 +143,9 @@ def generate_metadata(files):
     print(f"Processing {filename}...")
     with file.open('r', encoding='utf-8') as f:
       text = f.read()
-    # title = get_title(text)
-    # summary = get_summary(text)
-    # metadata[filename] = {"title": title, "summary": summary}
+      # title = get_title(text)
+      # summary = get_summary(text)
+      # metadata[filename] = {"title": title, "summary": summary}
       json_text = get_metadata(text)
       metadata[filename] = json.loads(json_text)
   # Save to metadata.json
