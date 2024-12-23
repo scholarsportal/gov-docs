@@ -3,8 +3,10 @@ __pycache__/
 .env
 venv/
 
-input/*
-!input/.gitkeep
+text/*
+!text/.gitkeep
+
+docs/*.pdf
 
 lance_db/
 metadata.json

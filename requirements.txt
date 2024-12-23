@@ -1,5 +1,12 @@
+# extract metadata
 lancedb
 ollama
 pandas
 python-dotenv
 transformers
+# ocr
+opencv-python
+numpy
+pillow
+pytesseract
+pdf2image
