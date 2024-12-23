@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from pathlib import Path
 import lancedb
 from dotenv import load_dotenv
@@ -16,10 +17,10 @@ from ollama import Client
 OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
 EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
 RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
-AUTH_HEADER = f"Bearer {os.getenv('API_KEY')}"
-OLLAMA_HEADERS = {
-    "Authorization": AUTH_HEADER
-}
+API_KEY = os.getenv('API_KEY')
+if not API_KEY:
+  raise ValueError("API_KEY environment variable not set")
+OLLAMA_HEADERS = {"Authorization": f"Bearer {API_KEY}"}
 CONTEXT_WINDOW = 4096
 PROMPT_OPTIONS = {"temperature": 0.1, "num_ctx": CONTEXT_WINDOW}
 VECTOR_DB_PATH = "./lance_db"
@@ -41,31 +42,42 @@ else:
   embeddings_table = vector_db.open_table("documents")
 
 
+def init():
+  # Initialize logging
+  logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO, format='%(message)s')
+
+
 def get_embedding(text):
-  response = ollama.embed(model=EMBEDDING_MODEL, input=text)
-  return response['embeddings']
+  try:
+    response = ollama.embed(model=EMBEDDING_MODEL, input=text)
+    return response['embeddings']
+  except Exception as e:
+    logging.error(f"Error getting embedding: {e}")
+    return None
 
 
-def run_prompt(prompt, label="generic", format:dict[str, any]=None):
+def run_prompt(prompt, label="generic", format: dict[str, any] = None):
   start_time = time.time()
-  if (DEBUG):
-    print(f"Running {label} prompt ...")
   # Ensure the prompt fits within the context window
   response_token_limit = 150  # Limit response tokens to avoid exceeding the context window
   max_prompt_tokens = CONTEXT_WINDOW - response_token_limit
   # Tokenize the prompt with truncation to fit within the token limit
   tokens = tokenizer.encode(prompt, truncation=True, max_length=max_prompt_tokens)
   prompt = tokenizer.decode(tokens, clean_up_tokenization_spaces=True)
-  response = ollama.generate(model=RAG_MODEL,
-                             prompt=prompt,
-                             stream=False,
-                             options=PROMPT_OPTIONS,
-                             format="json") # change to format whe ollama client adds support
-  answer = response['response'].strip()
-  end_time = time.time()  # End timer
-  if (DEBUG):
-    print(answer + f"\n** {end_time - start_time:.1f}s")
-  return answer
+  try:
+    response = ollama.generate(model=RAG_MODEL,
+                               prompt=prompt,
+                               stream=False,
+                               options=PROMPT_OPTIONS,
+                               format="json")  # change to format when ollama client adds support
+    answer = response['response'].strip()
+    end_time = time.time()  # End timer
+    logging.debug(answer)
+    logging.info(f"** {label} result in {end_time - start_time:.1f}s")
+    return answer
+  except Exception as e:
+    logging.error(f"Error running prompt: {e}")
+    return None
 
 
 def get_metadata(text):
@@ -114,10 +126,10 @@ def embed_documents(files):
     # Check if the embedding already exists in the table
     existing = embeddings_table.to_pandas().query(f"filename == '{filename}'")
     if not FORCE_REBUILD and not existing.empty:
-      print(f"Skipping embedding for {filename} (already exists)")
+      logging.info(f"Skipping embedding for {filename} (already exists)")
       continue
 
-    print(f"Embedding  {filename}...")
+    logging.info(f"Embedding  {filename}...")
     with file.open('r', encoding='utf-8') as f:
       text = f.read()
     embedding = get_embedding(text)
@@ -133,7 +145,7 @@ def generate_metadata(files):
   for file in files:
     filename = file.name
     text = ""
-    print(f"Processing {filename}...")
+    logging.info(f"Processing {filename}...")
     with file.open('r', encoding='utf-8') as f:
       text = f.read()
       # title = get_title(text)
@@ -144,12 +156,12 @@ def generate_metadata(files):
   # Save to metadata.json
   with open("metadata.json", 'w', encoding='utf-8') as f:
     json.dump(metadata, f, ensure_ascii=False, indent=2)
-  print(f"Metadata saved to metadata.json")
+  logging.info(f"Metadata saved to metadata.json")
 
 
 def main(input_path):
   if not os.path.exists(input_path):
-    print("The specified folder or file does not exist.")
+    logging.info("The specified folder or file does not exist.")
   else:
     input_path = Path(input_path)
     if input_path.is_file():
@@ -173,4 +185,5 @@ if __name__ == "__main__":
   args = parser.parse_args()
   FORCE_REBUILD = args.force
   DEBUG = args.debug
+  init()
   main(args.input)
