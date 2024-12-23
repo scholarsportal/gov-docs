@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-import numpy as np
 
 class MetaInfo(BaseModel):
   title: str
@@ -20,4 +19,4 @@ class MetaInfo(BaseModel):
 class GovDoc(MetaInfo):
   id: str
   filename: str
-  embedding: np.ndarray
+  embedding: list[float]
