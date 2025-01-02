@@ -1,3 +1,4 @@
+import csv
 import os
 import json
 import logging
@@ -18,7 +19,8 @@ from ollama import Client
 # Constants
 OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
 EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
-RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
+# RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
+RAG_MODEL = "llama3.2-vision:11b-instruct-q8_0"
 API_KEY = os.getenv('API_KEY')
 if not API_KEY:
   raise ValueError("API_KEY environment variable not set")
@@ -127,22 +129,50 @@ def embed_documents(files):
 
 
 def generate_metadata(files):
-  metadata = {}
-  for file in files:
-    filename = file.name
-    text = ""
-    logging.info(f"Processing {filename}...")
-    with file.open('r', encoding='utf-8') as f:
-      text = f.read()
-      # title = get_title(text)
-      # summary = get_summary(text)
-      # metadata[filename] = {"title": title, "summary": summary}
-      json_text = get_metadata(text)
-      metadata[filename] = json.loads(json_text)
-  # Save to metadata.json
+  if not files:
+    logging.info("No files provided to process.")
+    return
+  json_data = {}
+
+  # Extract metadata from the first file to determine field names
+  first_file = files[0]
+  filename = first_file.name
+  logging.info(f"Processing {filename}...")
+  with first_file.open('r', encoding='utf-8') as f:
+    text = f.read()
+    json_text = get_metadata(text)
+    metadata = json.loads(json_text)
+    json_data[filename] = metadata
+  fieldnames = list(metadata.keys())
+
+  # Prepare to write CSV
+  with open("metadata.csv", 'w', encoding='utf-8', newline='') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    # Write the first file that is already processed
+    writer.writerow(metadata)
+
+    # Process remaining files
+    for file in files[1:]:
+      filename = file.name
+      logging.info(f"Processing {filename}...")
+      with file.open('r', encoding='utf-8') as f:
+        text = f.read()
+        json_text = get_metadata(text)
+        metadata = json.loads(json_text)
+        json_data[filename] = metadata
+        # Ensure all field names are present in the metadata dictionary
+        for key in fieldnames:
+          if key not in metadata:
+            metadata[key] = ''
+        # Write the row to CSV
+        writer.writerow(metadata)
+  # Save to metadata.json as well
   with open("metadata.json", 'w', encoding='utf-8') as f:
-    json.dump(metadata, f, ensure_ascii=False, indent=2)
-  logging.info(f"Metadata saved to metadata.json")
+    json.dump(json_data, f, ensure_ascii=False, indent=2)
+
+  logging.info(f"Metadata saved to metadata.csv")
+
 
 
 def main(input_path):

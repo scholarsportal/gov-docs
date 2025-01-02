@@ -10,3 +10,4 @@ docs/*.pdf
 
 lance_db/
 metadata.json
+metadata.csv
