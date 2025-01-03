@@ -1,13 +1,10 @@
-import csv
 import os
 import json
 import logging
 from pathlib import Path
 import lancedb
 import numpy as np
-import pyarrow as pa
 from dotenv import load_dotenv
-import pandas as pd
 
 from src.classes import MetaInfo, create_GovDoc, create_MetaInfo, new_GovDoc, new_MetaInfo
 # Load environment variables from .env file
