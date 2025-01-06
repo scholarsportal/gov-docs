@@ -2,62 +2,16 @@ import os
 import json
 import logging
 from pathlib import Path
-import lancedb
 import numpy as np
-from dotenv import load_dotenv
-
-from src.classes import MetaInfo, create_GovDoc, create_MetaInfo, new_GovDoc, new_MetaInfo
-# Load environment variables from .env file
-load_dotenv()
 from transformers import GPT2Tokenizer
+
+from src.config import get_documents_table, ollama, RAG_MODEL, PROMPT_OPTIONS, CONTEXT_WINDOW, set_parameters, get_force_rebuild
+from src.classes import MetaInfo, create_GovDoc, create_MetaInfo, get_id_from_filename
+from src.embed import embed_document
+
 # Initialize the tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 import time
-from pydantic import BaseModel
-from ollama import Client
-
-# Constants
-OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
-EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
-# RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
-RAG_MODEL = "llama3.2-vision:11b-instruct-q8_0"
-API_KEY = os.getenv('API_KEY')
-if not API_KEY:
-  raise ValueError("API_KEY environment variable not set")
-OLLAMA_HEADERS = {"Authorization": f"Bearer {API_KEY}"}
-CONTEXT_WINDOW = 4096
-PROMPT_OPTIONS = {"temperature": 0.1, "num_ctx": CONTEXT_WINDOW}
-VECTOR_DB_PATH = "./lance_db"
-FORCE_REBUILD = False  # Set to True to rebuild the vector store from scratch
-DEBUG = False
-
-# Initialize Ollama client
-ollama = Client(
-    host=OLLAMA_API_URL,
-    headers=OLLAMA_HEADERS,
-)
-# Initialize LanceDB
-vector_db = lancedb.connect(VECTOR_DB_PATH)
-if "documents" not in vector_db.table_names():
-  # Provide a sample record to define the schema
-  sample_data = [new_GovDoc().model_dump()]
-  embeddings_table = vector_db.create_table("documents", sample_data)
-else:
-  embeddings_table = vector_db.open_table("documents")
-
-
-def init():
-  # Initialize logging
-  logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO, format='%(message)s')
-
-
-def get_embedding(text):
-  try:
-    response = ollama.embed(model=EMBEDDING_MODEL, input=text)
-    return response['embeddings']
-  except Exception as e:
-    logging.error(f"Error getting embedding: {e}")
-    return None
 
 
 def run_prompt(prompt, label="generic", format: dict[str, any] = None):
@@ -73,7 +27,7 @@ def run_prompt(prompt, label="generic", format: dict[str, any] = None):
                                prompt=prompt,
                                stream=False,
                                options=PROMPT_OPTIONS,
-                               format="json")  # change to format when ollama client adds support
+                               format="json") # json.dumps(format)
     answer = response['response'].strip()
     end_time = time.time()  # End timer
     logging.debug(answer)
@@ -109,31 +63,24 @@ def get_summary(text):
 
 def embed_documents(files):
   for file in files:
-    filename = file.name
-    text = ""
-    # Check if the embedding already exists in the table
-    existing = embeddings_table.to_pandas().query(f"filename == '{filename}'")
-    if not FORCE_REBUILD and not existing.empty:
-      logging.info(f"Skipping embedding for {filename} (already exists)")
-      continue
-
-    logging.info(f"Embedding  {filename}...")
+    doc_id = get_id_from_filename(file.name)
+    logging.info(f"Embedding  {doc_id}...")
     with file.open('r', encoding='utf-8') as f:
       text = f.read()
-    embedding = get_embedding(text)
-    flat_embedding = [float(val) for sublist in embedding for val in sublist]
-    # create new GovDoc object with empty metadata
-    govdoc = create_GovDoc(new_MetaInfo(), filename, flat_embedding)
-    # Store the govdoc in LanceDB
-    embeddings_table.merge_insert("filename").when_matched_update_all() \
-      .when_not_matched_insert_all() \
-      .execute([govdoc.model_dump()])
+    embed_document(text, doc_id)
 
 
 def clean_metadata(metadata):
+  # Handle None/Null values
   for key, value in metadata.items():
     if metadata.get(key) in (None, "", "null"):
       metadata[key] = ""
+    # Ensure that all number fields are strings
+    value = metadata.get(key)
+    if isinstance(value, int):
+      metadata[key] = str(value)
+
+  # Ensure that these fields are lists
   for key in ["authors", "editors", "language"]:
     value = metadata.get(key)
     # Ensure these fields are lists
@@ -146,20 +93,18 @@ def clean_metadata(metadata):
 
 
 def generate_metadata(files):
-  # Fetch existing records from LanceDB
-  records = embeddings_table.to_pandas()
+  documents_table = get_documents_table()
+  records = documents_table.to_pandas()
 
   for file in files:
     filename = file.name
     # Check if the file exists in the database
     existing_record = records.query(f"filename == '{filename}'")
-    if existing_record.empty:
-      logging.warning(f"File {filename} not found in LanceDB. Skipping metadata generation.")
-      continue
-    existing_title = existing_record["title"].values[0]
-    if existing_title and not FORCE_REBUILD:
-      logging.info(f"Skipping metadata generation for {filename} (already exists)")
-      continue
+    if not existing_record.empty:
+      existing_title = existing_record["title"].values[0]
+      if existing_title and not get_force_rebuild():
+        logging.info(f"Skipping metadata generation for {filename} (already exists)")
+        continue
 
     logging.info(f"Generating metadata for {filename}...")
     with file.open('r', encoding='utf-8') as f:
@@ -169,10 +114,9 @@ def generate_metadata(files):
     metadata_json_string = get_metadata(text)
     metadata = json.loads(metadata_json_string)
     metadata = clean_metadata(metadata)  # Handle None/Null values
-    govdoc = create_GovDoc(create_MetaInfo(metadata), filename,
-                           existing_record["embedding"].values[0])
+    govdoc = create_GovDoc(create_MetaInfo(metadata), filename)
     try:
-      embeddings_table.merge_insert("filename").when_matched_update_all() \
+      documents_table.merge_insert("filename").when_matched_update_all() \
           .when_not_matched_insert_all() \
           .execute([govdoc.model_dump()])
     except Exception as e:
@@ -182,13 +126,10 @@ def generate_metadata(files):
 def export_metadata_to_csv():
   try:
     # Convert the table to a pandas DataFrame
-    data = embeddings_table.to_pandas()
+    data = get_documents_table().to_pandas()
     # Exclude the first record (sample data)
     data = data.iloc[1:]
-    # Drop the 'embedding' column
-    if "embedding" in data.columns:
-      data = data.drop(columns=["embedding"])
-      # Convert ndarray or other non-serializable objects to Python lists
+    # Convert ndarray or other non-serializable objects to Python lists
     for column in data.columns:
       if data[column].apply(lambda x: isinstance(x, (list, np.ndarray))).any():
         data[column] = data[column].apply(lambda x: list(x) if isinstance(x, np.ndarray) else x)
@@ -229,7 +170,6 @@ if __name__ == "__main__":
                       help="Force embedding even if embeddings already exist")
   parser.add_argument("--debug", action="store_true", help="Executes the script in debug mode")
   args = parser.parse_args()
-  FORCE_REBUILD = args.force
-  DEBUG = args.debug
-  init()
+  set_parameters(args.debug, args.force)
+  logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO, format='%(message)s')
   main(args.input)
