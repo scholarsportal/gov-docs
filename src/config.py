@@ -11,8 +11,8 @@ load_dotenv()
 OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
 EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
 # RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
-# RAG_MODEL = "qwen2.5-coder:7b-instruct-q6_K"
-RAG_MODEL = "dolphin3:8b-llama3.1-q8_0"
+RAG_MODEL = "qwen2.5-coder:7b-instruct-q6_K"
+# RAG_MODEL = "dolphin3:8b-llama3.1-q8_0"
 # RAG_MODEL = "tulu3:8b-q8_0"
 API_KEY = os.getenv('API_KEY')
 if not API_KEY:
