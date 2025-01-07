@@ -55,7 +55,7 @@ def create_GovDoc(metadata: MetaInfo, doc_id: str, filename: str) -> GovDoc:
 
 
 def new_GovDoc() -> GovDoc:
-  return create_GovDoc(new_MetaInfo(), "sample.txt")
+  return create_GovDoc(new_MetaInfo(), "sample", "sample.txt")
 
 
 class Embedding(BaseModel):

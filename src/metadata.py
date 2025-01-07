@@ -41,7 +41,7 @@ def get_metadata(text):
   return metadata
 
 
-def clean_metadata(metadata):
+def clean_metadata_json(metadata):
   # Handle None/Null values
   for key, value in metadata.items():
     if metadata.get(key) in (None, "", "null"):
@@ -54,10 +54,9 @@ def clean_metadata(metadata):
   # Ensure that these fields are lists
   for key in ["authors", "editors", "languages"]:
     value = metadata.get(key)
-    # Ensure these fields are lists
     if not isinstance(value, list):
       if value in (None, "", "null"):
-        metadata[key] = [""]  # Replace empty or null-like values with an empty list
+        metadata[key] = []  # Replace empty or null-like values with an empty list
       else:
         metadata[key] = [value]  # Convert single string values to a list
   return metadata
@@ -75,7 +74,7 @@ def extract_metadata(text:str, filename:str):
 
   metadata_json_string = get_metadata(text)
   metadata = json.loads(metadata_json_string)
-  metadata = clean_metadata(metadata)  # Handle None/Null values
+  metadata = clean_metadata_json(metadata)  # Handle None/Null values
   govdoc = create_GovDoc(create_MetaInfo(metadata), doc_id, filename)
   try:
     documents_table.merge_insert("filename").when_matched_update_all() \
