@@ -25,7 +25,7 @@ if not QUERY_API_KEY:
   raise ValueError("QUERY_API_KEY not found in environment variables")
 QUERY_HEADERS = {"Authorization": f"Bearer {QUERY_API_KEY}"}
 CONTEXT_WINDOW = 4096
-PROMPT_OPTIONS = {"temperature": 0.5, "num_ctx": CONTEXT_WINDOW}
+PROMPT_OPTIONS = {"temperature": 0.2, "num_ctx": CONTEXT_WINDOW}
 VECTOR_DB_PATH = "./lance_db"
 FORCE_REBUILD = False  # Set to True to rebuild the vector store from scratch
 DEBUG = False

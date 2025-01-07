@@ -1,7 +1,7 @@
 import re
 import logging
 
-from src.classes import Embedding
+from src.classes import Embedding, get_id_from_filename
 from src.config import get_embeddings_table, ollama_embed, EMBEDDING_MODEL, get_force_rebuild
 
 MIN_CHUNK_SIZE = 100
@@ -105,7 +105,8 @@ def get_embedding(text):
     return None
 
 
-def embed_document(text, doc_id):
+def embed_document(text, filename):
+  doc_id = get_id_from_filename(filename)
   # Check if the embedding already exists in the table
   existing = embeddings_table.to_pandas().query(f"doc_id == '{doc_id}'")
   if not get_force_rebuild() and not existing.empty:

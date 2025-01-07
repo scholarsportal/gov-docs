@@ -2,6 +2,11 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 
+def get_id_from_filename(filename: str) -> str:
+  # id is the last part of the file path without the filename extension
+  return filename.split("/")[-1].split(".")[0]
+
+
 class MetaInfo(BaseModel):
   title: Optional[str] = None
   level_of_government: Optional[str] = None
@@ -15,7 +20,7 @@ class MetaInfo(BaseModel):
   copyright_year: Optional[str] = None
   ISSN: Optional[str] = None
   ISBN: Optional[str] = None
-  language: Optional[List[str]] = None
+  languages: Optional[List[str]] = None
   summary: Optional[str] = None
 
 
@@ -36,7 +41,7 @@ def new_MetaInfo() -> MetaInfo:
                   copyright_year="",
                   ISSN="",
                   ISBN="",
-                  language=[""],
+                  languages=[""],
                   summary="")
 
 
@@ -45,14 +50,8 @@ class GovDoc(MetaInfo):
   filename: str
 
 
-def get_id_from_filename(filename: str) -> str:
-  # id is the last part of the file path without the filename extension
-  return filename.split("/")[-1].split(".")[0]
-
-
-def create_GovDoc(metadata: MetaInfo, filename: str) -> GovDoc:
-  id = get_id_from_filename(filename)
-  return GovDoc(**metadata.model_dump(), doc_id=id, filename=filename)
+def create_GovDoc(metadata: MetaInfo, doc_id: str, filename: str) -> GovDoc:
+  return GovDoc(**metadata.model_dump(), doc_id=doc_id, filename=filename)
 
 
 def new_GovDoc() -> GovDoc:
