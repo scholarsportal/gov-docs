@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from transformers import GPT2Tokenizer
 
-from src.config import get_documents_table, ollama, RAG_MODEL, PROMPT_OPTIONS, CONTEXT_WINDOW, set_parameters, get_force_rebuild
+from src.config import get_documents_table, ollama_query, QUERY_MODEL, PROMPT_OPTIONS, CONTEXT_WINDOW, set_parameters, get_force_rebuild
 from src.classes import MetaInfo, create_GovDoc, create_MetaInfo, get_id_from_filename
 from src.embed import embed_document
 
@@ -23,7 +23,7 @@ def run_prompt(prompt, label="generic", format: dict[str, any] = None):
   tokens = tokenizer.encode(prompt, truncation=True, max_length=max_prompt_tokens)
   prompt = tokenizer.decode(tokens, clean_up_tokenization_spaces=True)
   try:
-    response = ollama.generate(model=RAG_MODEL,
+    response = ollama_query.generate(model=QUERY_MODEL,
                                prompt=prompt,
                                stream=False,
                                options=PROMPT_OPTIONS,

@@ -8,26 +8,36 @@ from src.classes import new_GovDoc, new_Embedding
 load_dotenv()
 
 # Constants
-OLLAMA_API_URL = "https://openwebui.zacanbot.com/ollama"
+OLLAMA_EMBED_URL = "https://openwebui.zacanbot.com/ollama"
 EMBEDDING_MODEL = "snowflake-arctic-embed2:latest"
-# RAG_MODEL = "llama3.2-vision-11b-q8_0:latest"
-RAG_MODEL = "qwen2.5-coder:7b-instruct-q6_K"
-# RAG_MODEL = "dolphin3:8b-llama3.1-q8_0"
-# RAG_MODEL = "tulu3:8b-q8_0"
-API_KEY = os.getenv('API_KEY')
-if not API_KEY:
-  raise ValueError("API_KEY environment variable not set")
-OLLAMA_HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+EMBED_API_KEY = os.getenv('EMBED_API_KEY')
+if not EMBED_API_KEY:
+  raise ValueError("EMBED_API_KEY not found in environment variables")
+EMBED_HEADERS = {"Authorization": f"Bearer {EMBED_API_KEY}"}
+OLLAMA_QUERY_URL = "https://ollama.scholarsportal.info/ollama"
+QUERY_MODEL = "llama3.2-vision:11b-instruct-q8_0"
+# QUERY_MODEL = "llama3.2-vision-11b-q8_0:latest"
+# QUERY_MODEL = "qwen2.5-coder:7b-instruct-q6_K"
+# QUERY_MODEL = "dolphin3:8b-llama3.1-q8_0"
+# QUERY_MODEL = "tulu3:8b-q8_0"
+QUERY_API_KEY = os.getenv('QUERY_API_KEY')
+if not QUERY_API_KEY:
+  raise ValueError("QUERY_API_KEY not found in environment variables")
+QUERY_HEADERS = {"Authorization": f"Bearer {QUERY_API_KEY}"}
 CONTEXT_WINDOW = 4096
 PROMPT_OPTIONS = {"temperature": 0.5, "num_ctx": CONTEXT_WINDOW}
 VECTOR_DB_PATH = "./lance_db"
 FORCE_REBUILD = False  # Set to True to rebuild the vector store from scratch
 DEBUG = False
 
-# Initialize Ollama client
-ollama = Client(
-    host=OLLAMA_API_URL,
-    headers=OLLAMA_HEADERS,
+# Initialize Ollama clients
+ollama_embed = Client(
+    host=OLLAMA_EMBED_URL,
+    headers=EMBED_HEADERS,
+)
+ollama_query = Client(
+    host=OLLAMA_QUERY_URL,
+    headers=QUERY_HEADERS,
 )
 # Initialize LanceDB
 vector_db = lancedb.connect(VECTOR_DB_PATH)

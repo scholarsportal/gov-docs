@@ -2,7 +2,7 @@ import re
 import logging
 
 from src.classes import Embedding
-from src.config import get_embeddings_table, ollama, EMBEDDING_MODEL, get_force_rebuild
+from src.config import get_embeddings_table, ollama_embed, EMBEDDING_MODEL, get_force_rebuild
 
 MIN_CHUNK_SIZE = 100
 MAX_CHUNK_SIZE = 500
@@ -98,7 +98,7 @@ def print_chunks(chunks):
 
 def get_embedding(text):
   try:
-    response = ollama.embed(model=EMBEDDING_MODEL, input=text)
+    response = ollama_embed.embed(model=EMBEDDING_MODEL, input=text)
     return response['embeddings']
   except Exception as e:
     logging.error(f"Error getting embedding: {e}")
