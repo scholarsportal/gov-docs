@@ -9,20 +9,21 @@ from src.classes import MetaInfo, create_GovDoc, create_MetaInfo, get_id_from_fi
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 documents_table = get_documents_table()
 
+
 def run_prompt(prompt, label="generic", format: dict[str, any] = None):
   start_time = time.time()
   # Ensure the prompt fits within the context window
-  response_tokens = 150  # Consider response tokens to avoid exceeding the context window
+  response_tokens = 200  # Consider response tokens to avoid exceeding the context window
   max_prompt_tokens = CONTEXT_WINDOW - response_tokens
   # Tokenize the prompt with truncation to fit within the token limit
   tokens = tokenizer.encode(prompt, truncation=True, max_length=max_prompt_tokens)
   prompt = tokenizer.decode(tokens, clean_up_tokenization_spaces=True)
   try:
     response = ollama_query.generate(model=QUERY_MODEL,
-                               prompt=prompt,
-                               stream=False,
-                               options=PROMPT_OPTIONS,
-                               format="json") # json.dumps(format)
+                                     prompt=prompt,
+                                     stream=False,
+                                     options=PROMPT_OPTIONS,
+                                     format="json")  # json.dumps(format)
     answer = response['response'].strip()
     end_time = time.time()  # End timer
     logging.debug(answer)
@@ -41,6 +42,27 @@ def get_metadata(text):
   return metadata
 
 
+def get_catergory_keywords(text):
+  format = {
+      "type": "object",
+      "properties": {
+          "keywords": {
+              "type": "array",
+              "items": {
+                  "type": "string"
+              }
+          },
+          "category": {
+              "type": "string"
+          }
+      }
+  }
+  category_prompt = f"Categorize a document into one of the following categories (specific definitions provided here to aid picking the best category):\n* Financial and Operational Reports (Reports from ministries or agencies detailing their activities and finances. Includes annual reports, budgets, expenditure estimates, public accounts, statements, and fiscal summaries)\n* Research and Analysis (In-depth examinations of specific topics, including research reports, discussion papers, and documents that summarize public feedback and consultations)\n* News and Media (Documents designed for public communication, including bulletins, notices, news releases, backgrounders, newsletters, and speeches by government officials)\n* Policies and Directives (Documents that outline rules, regulations, and best practices, including policies, directives, manuals, guidelines, standards, and codes)\n* Strategic and Operational Plans (Documents that outline goals, objectives, and plans for the future, including strategic plans, mandate letters, and ministerial objectives)\n* Promotional and Educational Material (Documents designed to educate or promote government initiatives or public awareness, including brochures, pamphlets, flyers, educational content, and informational guides)\n\nOutput the results in JSON format.\nDocument text follows:\n\n{text}"
+  prompt = f"Create metadata fields `keywords` and `category` for a document.\n\nExtract the 5 best keywords from a document to aid in indexing and searchability.\nKeywords are words or short phrases that are less than 3 words that help to categorize and index the document for easier retrieval and searchability in databases and search engines. They enable researchers and readers to quickly identify the relevant subject matter and scope of the document.\nEach keyword entry should not have more than two words.\nDon't include keywords represented by the document title.\n\nCategorize the document into one of the following categories:\n* Financial and Operational Reports\n* Research and Analysis\n* News and Media\n* Policies and Directives\n* Strategic and Operational Plans\n* Promotional and Educational Material\n\nOutput the results in JSON format.\nDocument text follows:\n\n{text}"
+  category = run_prompt(prompt, "category", format)
+  return category
+
+
 def clean_metadata_json(metadata):
   # Handle None/Null values
   for key, value in metadata.items():
@@ -52,7 +74,7 @@ def clean_metadata_json(metadata):
       metadata[key] = str(value)
 
   # Ensure that these fields are lists
-  for key in ["authors", "editors", "languages"]:
+  for key in ["authors", "editors", "languages", "keywords"]:
     value = metadata.get(key)
     if not isinstance(value, list):
       if value in (None, "", "null"):
@@ -62,7 +84,7 @@ def clean_metadata_json(metadata):
   return metadata
 
 
-def extract_metadata(text:str, filename:str):
+def extract_metadata(text: str, filename: str):
   doc_id = get_id_from_filename(filename)
   # Check if the file exists in the database
   existing_record = documents_table.to_pandas().query(f"doc_id == '{doc_id}'")
@@ -76,6 +98,11 @@ def extract_metadata(text:str, filename:str):
   metadata = json.loads(metadata_json_string)
   metadata = clean_metadata_json(metadata)  # Handle None/Null values
   govdoc = create_GovDoc(create_MetaInfo(metadata), doc_id, filename)
+  cat_json_string = get_catergory_keywords(text)
+  cat = json.loads(cat_json_string)
+  cat = clean_metadata_json(cat)  # Handle None/Null values
+  govdoc.keywords = cat.get("keywords")
+  govdoc.category = cat.get("category")
   try:
     documents_table.merge_insert("filename").when_matched_update_all() \
         .when_not_matched_insert_all() \

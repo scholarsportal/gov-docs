@@ -48,10 +48,13 @@ def new_MetaInfo() -> MetaInfo:
 class GovDoc(MetaInfo):
   doc_id: str
   filename: str
+  category: Optional[str] = None
+  keywords: Optional[List[str]] = None
 
 
 def create_GovDoc(metadata: MetaInfo, doc_id: str, filename: str) -> GovDoc:
-  return GovDoc(**metadata.model_dump(), doc_id=doc_id, filename=filename)
+  govdoc = GovDoc(**metadata.model_dump(), doc_id=doc_id, filename=filename, category="", keywords=[""])
+  return govdoc
 
 
 def new_GovDoc() -> GovDoc:

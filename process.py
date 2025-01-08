@@ -74,4 +74,7 @@ if __name__ == "__main__":
   args = parser.parse_args()
   set_parameters(args.debug, args.force)
   logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO, format='%(message)s')
+  if not args.debug:
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    print("Disabled INFO messages for Ollama requests.")
   main(args.input)

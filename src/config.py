@@ -16,7 +16,6 @@ if not EMBED_API_KEY:
 EMBED_HEADERS = {"Authorization": f"Bearer {EMBED_API_KEY}"}
 OLLAMA_QUERY_URL = "https://ollama.scholarsportal.info/ollama"
 QUERY_MODEL = "llama3.2-vision:11b-instruct-q8_0"
-# QUERY_MODEL = "llama3.2-vision-11b-q8_0:latest"
 # QUERY_MODEL = "qwen2.5-coder:7b-instruct-q6_K"
 # QUERY_MODEL = "dolphin3:8b-llama3.1-q8_0"
 # QUERY_MODEL = "tulu3:8b-q8_0"
@@ -25,7 +24,7 @@ if not QUERY_API_KEY:
   raise ValueError("QUERY_API_KEY not found in environment variables")
 QUERY_HEADERS = {"Authorization": f"Bearer {QUERY_API_KEY}"}
 CONTEXT_WINDOW = 4096
-PROMPT_OPTIONS = {"temperature": 0.2, "num_ctx": CONTEXT_WINDOW}
+PROMPT_OPTIONS = {"temperature": 0.0, "num_ctx": CONTEXT_WINDOW}
 VECTOR_DB_PATH = "./lance_db"
 FORCE_REBUILD = False  # Set to True to rebuild the vector store from scratch
 DEBUG = False
