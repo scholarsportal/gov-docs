@@ -12,17 +12,23 @@ from src.metadata import extract_metadata
 def embed_documents(files):
   for file in files:
     logging.info(f"Embedding  {file.name}...")
-    with file.open('r', encoding='utf-8') as f:
-      text = f.read()
-    embed_document(text, file.name)
+    try:
+      with file.open('r', encoding='utf-8') as f:
+        text = f.read()
+      embed_document(text, file.name)
+    except Exception as e:
+      logging.error(f"Error embedding {file.name}: {e}")
 
 
 def generate_metadata(files):
   for file in files:
     logging.info(f"Generating metadata for {file.name}...")
-    with file.open('r', encoding='utf-8') as f:
-      text = f.read()
-    extract_metadata(text, file.name)
+    try:
+      with file.open('r', encoding='utf-8') as f:
+        text = f.read()
+      extract_metadata(text, file.name)
+    except Exception as e:
+      logging.error(f"Error generating metadata for {file.name}: {e}")
 
 
 def export_metadata():
@@ -35,6 +41,8 @@ def export_metadata():
     data = data.drop(columns=["filename"])
     # Put the doc_id column first
     data = data[["doc_id"] + [col for col in data.columns if col != "doc_id"]]
+    # Order the data by doc_id
+    data = data.sort_values(by="doc_id")
     # Convert ndarray or other non-serializable objects to Python lists
     for column in data.columns:
       if data[column].apply(lambda x: isinstance(x, (list, np.ndarray))).any():

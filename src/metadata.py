@@ -37,7 +37,7 @@ def run_prompt(prompt, label="generic", format: dict[str, any] = None):
 def get_metadata(text):
 
   format = MetaInfo.model_json_schema()
-  metadata_prompt = f"Please extract the following information from a document: 1.) title, 2.) summary, 3.) level_of_government, 4.) responsible_province, 5.) responsible_city, 6.) authors, 7.) editors 8.) publisher, 9.) publish_date, 10.) publisher_location, 11.) copyright_year, 12.) ISSN, 13.) ISBN, 14.) languages. If the exact title of the document is obvious in the text, then use that, alternatively the title should be your most releveant suggestion for the document and also be less than 8 words. The summary should be concise but still representative of the content of the text and also less than 50 words. Level of government is one of three options: 'federal', 'provincial', or 'municipal'. If the level of government is federal, the responsible province should be Ontario. Federal documents are Ottawa's responsibility. And provincial documents are the responsibility of the capital city of the responsible_province. Municipal documents are the responsibility of that city. The publish date should be converted to yyyy-mm-dd format. If found, write the ISBN number in this format: X-XXXX-XXXX-X. Detected languages should be one or both of these options: 'en', 'fr'. Only include a language if a significant portion of the text is in that language. You should output the information as JSON. Here follows the available document text:\n\n{text}"
+  metadata_prompt = f"Please extract the following information from a document: 1.) title, 2.) summary, 3.) level_of_government, 4.) responsible_province, 5.) responsible_city, 6.) authors, 7.) editors 8.) publisher, 9.) publish_date, 10.) publisher_location, 11.) copyright_year, 12.) ISSN, 13.) ISBN, 14.) languages. If the exact title of the document is obvious in the text, then use that, alternatively the title should be your most releveant suggestion for the document and also be less than 8 words. The summary should be concise but still representative of the content of the text and also less than 50 words. Level of government is one of three options: 'federal', 'provincial', or 'municipal'. If the level of government is federal, the responsible province should be Ontario. Federal documents are Ottawa's responsibility. And provincial documents are the responsibility of the capital city of the responsible_province. Municipal documents are the responsibility of that city. The authors and editors lists should only contain strings of the respective names of authors and editors. The publish date should be converted to yyyy-mm-dd format. If found, write the ISBN number in this format: X-XXXX-XXXX-X. Detected languages should be one or both of these options: 'en', 'fr'. Only include a language if a significant portion of the text is in that language. You should output the information as JSON. Here follows the available document text:\n\n{text}"
   metadata = run_prompt(metadata_prompt, "metadata", format)
   return metadata
 
@@ -97,7 +97,12 @@ def extract_metadata(text: str, filename: str):
   metadata_json_string = get_metadata(text)
   metadata = json.loads(metadata_json_string)
   metadata = clean_metadata_json(metadata)  # Handle None/Null values
-  govdoc = create_GovDoc(create_MetaInfo(metadata), doc_id, filename)
+  try:
+    govdoc = create_GovDoc(create_MetaInfo(metadata), doc_id, filename)
+  except Exception as e:
+    logging.error(f"Error mapping metadata: {e}")
+    print(metadata)
+    return
   cat_json_string = get_catergory_keywords(text)
   cat = json.loads(cat_json_string)
   cat = clean_metadata_json(cat)  # Handle None/Null values
@@ -108,4 +113,4 @@ def extract_metadata(text: str, filename: str):
         .when_not_matched_insert_all() \
         .execute([govdoc.model_dump()])
   except Exception as e:
-    print(f"Error merging metadata: {e}")
+    logging.error(f"Error merging metadata: {e}")
