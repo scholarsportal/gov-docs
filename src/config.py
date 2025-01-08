@@ -15,7 +15,8 @@ if not EMBED_API_KEY:
   raise ValueError("EMBED_API_KEY not found in environment variables")
 EMBED_HEADERS = {"Authorization": f"Bearer {EMBED_API_KEY}"}
 OLLAMA_QUERY_URL = "https://ollama.scholarsportal.info/ollama"
-QUERY_MODEL = "llama3.2-vision:11b-instruct-q8_0"
+# QUERY_MODEL = "llama3.2-vision:11b-instruct-q8_0"
+QUERY_MODEL = "qwen2.5-coder:14b-instruct-q8_0"
 # QUERY_MODEL = "qwen2.5-coder:7b-instruct-q6_K"
 # QUERY_MODEL = "dolphin3:8b-llama3.1-q8_0"
 # QUERY_MODEL = "tulu3:8b-q8_0"

@@ -31,17 +31,24 @@ def export_metadata():
     data = get_documents_table().to_pandas()
     # Exclude the first record (sample data)
     data = data.iloc[1:]
+    # Drop the filename column
+    data = data.drop(columns=["filename"])
+    # Put the doc_id column first
+    data = data[["doc_id"] + [col for col in data.columns if col != "doc_id"]]
     # Convert ndarray or other non-serializable objects to Python lists
     for column in data.columns:
       if data[column].apply(lambda x: isinstance(x, (list, np.ndarray))).any():
         data[column] = data[column].apply(lambda x: list(x) if isinstance(x, np.ndarray) else x)
-
-    # Write the DataFrame to a CSV file
-    data.to_csv("metadata.csv", index=False, encoding='utf-8')
     # Export to JSON
     with open("metadata.json", 'w', encoding='utf-8') as json_file:
       metadata = data.to_dict(orient="records")
       json.dump(metadata, json_file, ensure_ascii=False, indent=2)
+    # Convert lists to strings
+    for column in data.columns:
+      if data[column].apply(lambda x: isinstance(x, list)).any():
+        data[column] = data[column].apply(lambda x: ", ".join(x))
+    # Write the DataFrame to a CSV file
+    data.to_csv("metadata.csv", index=False, encoding='utf-8')
     print(f"Metadata successfully exported to metadata.csv and metadata.json")
   except Exception as e:
     print(f"Error exporting metadata: {e}")
@@ -56,6 +63,7 @@ def main(input_path):
       files = [input_path]
     else:
       files = list(input_path.rglob("*.txt"))
+      files.sort(key=lambda x: x.name)
 
     embed_documents(files)
     generate_metadata(files)
