@@ -4,43 +4,65 @@ from pathlib import Path
 import cv2
 import numpy as np
 from pdf2image import convert_from_path
+from pdf2image.pdf2image import pdfinfo_from_path
 import pytesseract
 from concurrent.futures import ProcessPoolExecutor
-from PIL import Image, ImageOps, ImageEnhance
+from multiprocessing import Pool, cpu_count
+from PIL import Image, ImageEnhance
 
 DEBUG = False
 FORCE = False
-DPI = 150 # Try to match source document resolution
-CONTRAST = 0.9 # lower to remove noise, higher than one to increase contrast
+DPI = 150  # Try to match source document resolution
+CONTRAST = 0.8  # lower to remove noise, higher than one to increase contrast
 LANG = "eng+fra"
 MAX_WORKERS = 16
+
+
+def remove_bleed_through(image):
+  # Convert to grayscale
+  gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+  # Apply slight non-local means denoising
+  denoised = cv2.fastNlMeansDenoising(gray, None, 8, 7, 21)
+  # Smooth the result for cleaner output
+  smoothed = cv2.medianBlur(denoised, 1)
+  return smoothed
 
 
 def ocr_page(args):
   i, image = args
   print(f"Processing page {i} ...")
-  # convert Pillow image to grayscale
-  grayscale_image = ImageOps.grayscale(image)
-
-  # blow out see-through text
-  # increase brightness
-  brightness_enhancer = ImageEnhance.Brightness(grayscale_image)
-  brightness = 1.0
-  if CONTRAST < brightness:
-    brightness = 2 - CONTRAST # 1.15 to 1.7 seems to work best
-  brightened_image = brightness_enhancer.enhance(brightness)
-  # decrease contrast
+  # adjust exposure
+  brightness_enhancer = ImageEnhance.Brightness(image)
+  brightened_image = brightness_enhancer.enhance(CONTRAST)
   contrast_enhancer = ImageEnhance.Contrast(brightened_image)
-  faded_image = contrast_enhancer.enhance(CONTRAST)
-
-  # blur image slightly to smooth out noise
-  image_np = np.array(faded_image)
-  blurred_np = cv2.medianBlur(image_np, 1)
-  processed_image = Image.fromarray(blurred_np)
+  contrasted_image = contrast_enhancer.enhance(CONTRAST)
+  # remove noise
+  denoised_image = remove_bleed_through(np.array(contrasted_image))
+  processed_image = Image.fromarray(denoised_image)
   processed_image.info['dpi'] = (DPI, DPI)
-
   ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {DPI}")
   return (i + 1, ocr_text)  # Return page number and OCR text as a tuple
+
+
+def extract_images(pages, filepath, dpi):
+    return convert_from_path(filepath, dpi=dpi, first_page=pages[0], last_page=pages[-1])
+
+def extract_images_from_pdf(filepath, dpi, first_page=1, last_page=None):
+    total_pages = pdfinfo_from_path(filepath)['Pages']
+    # Split the pages into chunks for parallel processing
+    page_chunks = [
+        range(i, min(i + (total_pages // MAX_WORKERS) + 1, total_pages + 1))
+        for i in range(1, total_pages + 1, (total_pages // MAX_WORKERS) + 1)
+    ]
+    # Use a multiprocessing Pool to process the chunks
+    with Pool(MAX_WORKERS) as pool:
+        results = pool.starmap(
+            extract_images,
+            [(pages, filepath, dpi) for pages in page_chunks]
+        )
+    # Flatten the list of results since each chunk is processed separately
+    images = [img for result in results for img in result]
+    return images
 
 
 def ocr_pdf(input_path):
@@ -67,10 +89,10 @@ def ocr_pdf(input_path):
       print(f"Text file {output_txt_path} already exists. Skipping.")
       continue
     print(f"Extracting images from {file.name} ({current_file} of {num_files}) ...")
-    if DEBUG: # Extract only the first 30 images
-      images = convert_from_path(filepath, dpi=DPI, first_page=1, last_page=30)
-    else: # Extract all images
-      images = convert_from_path(filepath, dpi=DPI)
+    if DEBUG:  # Extract only the first 30 images
+      images = extract_images_from_pdf(filepath, dpi=DPI, first_page=1, last_page=30)
+    else:  # Extract all images
+      images = extract_images_from_pdf(filepath, dpi=DPI)
     print(f"{len(images)} pages found. Starting OCR.")
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
       ocr_texts = list(executor.map(ocr_page, enumerate(images)))
@@ -86,10 +108,17 @@ if __name__ == "__main__":
       description="Process images from input folder and save to output folder.")
   parser.add_argument("input_path", type=str, help="Path to the input folder containing pdf files")
   parser.add_argument("--dpi", type=int, help="DPI setting for pdf OCR (optional)")
-  parser.add_argument("--contrast", type=float, help="less than 1.0 to remove faint noise (optional)")
-  parser.add_argument("--lang", type=str, default='eng+fra', help="Tesseract language string for OCR (optional)")
+  parser.add_argument("--contrast",
+                      type=float,
+                      help="less than 1.0 to remove faint noise (optional)")
+  parser.add_argument("--lang",
+                      type=str,
+                      default='eng+fra',
+                      help="Tesseract language string for OCR (optional)")
   parser.add_argument("--debug", action='store_true', help="Enable debug mode (optional)")
-  parser.add_argument("--force", action='store_true', help="Process OCR even if text file exist already (optional)")
+  parser.add_argument("--force",
+                      action='store_true',
+                      help="Process OCR even if text file exist already (optional)")
   args = parser.parse_args()
   DEBUG = args.debug
   FORCE = args.force
@@ -99,4 +128,6 @@ if __name__ == "__main__":
     CONTRAST = args.contrast
   if args.lang is not None:
     LANG = args.lang
+  MAX_WORKERS = min(cpu_count(), MAX_WORKERS)
+  print(f"Using {MAX_WORKERS} workers.")
   ocr_pdf(input_path=args.input_path)

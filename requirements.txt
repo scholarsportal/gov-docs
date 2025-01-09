@@ -10,3 +10,4 @@ numpy
 pillow
 pytesseract
 pdf2image
+scikit-image

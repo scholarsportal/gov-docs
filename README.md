@@ -17,7 +17,8 @@ pip install -r requirements.txt
 Create a `.env` file with the following content:
 
 ```text
-API_KEY = <your-Ollama-api-key>
+EMBED_API_KEY = <your-Ollama-api-key>
+QUERY_API_KEY = <your-Ollama-api-key>
 ```
 
 ## 1. Download Internet Archive Documents
@@ -35,7 +36,7 @@ The optional number parameter after the input csv file indicates the maximum num
 You can use the `ocr_pdf.py` script to perform OCR on a pdf file. This script uses Tesseract to detect text in a pdf and then saves it to a text file. If your pdf files are located in the `docs` folder, the script can be executed like this:
 
 ```bash
-python ocr_pdf.py docs --dpi 300 --contrast 0.5 --lang eng --debug --force
+python ocr_pdf.py docs --dpi 196 --contrast 0.8 --lang eng --debug --force
 ```
 
 The *debug* flag will limit processing to 30 pages. The *dpi* setting controls the resolution of the images used for OCR. Try to match the input document resolution. The *contrast* setting is a multiplier that can be used to adjust the contrast of the image before OCR. Use higher values if some text is not detected and lower values if too much text is detected. If you are getting lots of garbage text, try lowering the contrast to 0.8 or even 0.7. The *lang* setting controls the language used for OCR. You can use multiple languages separated by a + sign, e.g., `--lang eng+fra` (default). Normally, the script will not redo the OCR if a .txt file already exists. Using the `--force` parameter will override this behaviour.
