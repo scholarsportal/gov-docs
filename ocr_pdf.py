@@ -12,8 +12,8 @@ from PIL import Image, ImageEnhance
 
 DEBUG = False
 FORCE = False
-DPI = 150  # Try to match source document resolution
-CONTRAST = 0.8  # lower to remove noise, higher than one to increase contrast
+DPI = 196  # 256 for high quality, 196 for medium quality, 120 for low quality
+CONTRAST = 1.1  # lower than 1.0 to reduce contrast and brigtness
 LANG = "eng+fra"
 MAX_WORKERS = 16
 
@@ -32,10 +32,13 @@ def ocr_page(args):
   i, image = args
   print(f"Processing page {i} ...")
   # adjust exposure
-  brightness_enhancer = ImageEnhance.Brightness(image)
-  brightened_image = brightness_enhancer.enhance(CONTRAST)
-  contrast_enhancer = ImageEnhance.Contrast(brightened_image)
-  contrasted_image = contrast_enhancer.enhance(CONTRAST)
+  if CONTRAST != 1.0:
+    brightness_enhancer = ImageEnhance.Brightness(image)
+    brightened_image = brightness_enhancer.enhance(CONTRAST)
+    contrast_enhancer = ImageEnhance.Contrast(brightened_image)
+    contrasted_image = contrast_enhancer.enhance(CONTRAST)
+  else:
+    contrasted_image = image
   # remove noise
   denoised_image = remove_bleed_through(np.array(contrasted_image))
   processed_image = Image.fromarray(denoised_image)
@@ -45,24 +48,26 @@ def ocr_page(args):
 
 
 def extract_images(pages, filepath, dpi):
-    return convert_from_path(filepath, dpi=dpi, first_page=pages[0], last_page=pages[-1])
+  return convert_from_path(filepath, dpi=dpi, first_page=pages[0], last_page=pages[-1])
+
 
 def extract_images_from_pdf(filepath, dpi, first_page=1, last_page=None):
+  # set total_pages to last_page if it is not None
+  if last_page is not None:
+    total_pages = last_page
+  else:
     total_pages = pdfinfo_from_path(filepath)['Pages']
-    # Split the pages into chunks for parallel processing
-    page_chunks = [
-        range(i, min(i + (total_pages // MAX_WORKERS) + 1, total_pages + 1))
-        for i in range(1, total_pages + 1, (total_pages // MAX_WORKERS) + 1)
-    ]
-    # Use a multiprocessing Pool to process the chunks
-    with Pool(MAX_WORKERS) as pool:
-        results = pool.starmap(
-            extract_images,
-            [(pages, filepath, dpi) for pages in page_chunks]
-        )
-    # Flatten the list of results since each chunk is processed separately
-    images = [img for result in results for img in result]
-    return images
+  # Split the pages into chunks for parallel processing
+  page_chunks = [
+      range(i, min(i + (total_pages // MAX_WORKERS) + 1, total_pages + 1))
+      for i in range(1, total_pages + 1, (total_pages // MAX_WORKERS) + 1)
+  ]
+  # Use a multiprocessing Pool to process the chunks
+  with Pool(MAX_WORKERS) as pool:
+    results = pool.starmap(extract_images, [(pages, filepath, dpi) for pages in page_chunks])
+  # Flatten the list of results since each chunk is processed separately
+  images = [img for result in results for img in result]
+  return images
 
 
 def ocr_pdf(input_path):
