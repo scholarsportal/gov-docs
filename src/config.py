@@ -17,10 +17,11 @@ if not EMBED_API_KEY:
 EMBED_HEADERS = {"Authorization": f"Bearer {EMBED_API_KEY}"}
 OLLAMA_QUERY_URL = "https://ollama.scholarsportal.info/ollama"
 # OLLAMA_QUERY_URL = "https://openwebui.zacanbot.com/ollama"
-QUERY_MODEL = "llama3.2-vision:11b-instruct-q8_0"
-# QUERY_MODEL = "qwen2.5-coder:14b-instruct-q8_0"
-# QUERY_MODEL = "phi4:14b-q8_0"
+# QUERY_MODEL = "llama3.3:latest"
+# QUERY_MODEL = "llama3.2-vision:11b-instruct-q8_0"
+# QUERY_MODEL = "qwen2.5-coder:32b-instruct-q6_K"
 # QUERY_MODEL = "qwen2.5-coder:14b-instruct-q6_K"
+QUERY_MODEL = "phi4:14b-q8_0"
 # QUERY_MODEL = "dolphin3:8b-llama3.1-q8_0"
 # QUERY_MODEL = "tulu3:8b-q8_0"
 QUERY_API_KEY = os.getenv('QUERY_API_KEY')
@@ -37,12 +38,12 @@ DEBUG = False
 ollama_embed = Client(
     host=OLLAMA_EMBED_URL,
     headers=EMBED_HEADERS,
-    timeout=30,
+    timeout=60,
 )
 ollama_query = Client(
     host=OLLAMA_QUERY_URL,
     headers=QUERY_HEADERS,
-    timeout=30,
+    timeout=60,
 )
 # Initialize LanceDB
 vector_db = lancedb.connect(VECTOR_DB_PATH)
