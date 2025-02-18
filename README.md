@@ -17,6 +17,8 @@ pip install -r requirements.txt
 Create a `.env` file with the following content:
 
 ```text
+OLLAMA_EMBED_URL = "https://ollama-dev.scholarsportal.info/ollama"
+OLLAMA_QUERY_URL = "https://ollama.scholarsportal.info/ollama"
 EMBED_API_KEY = <your-Ollama-api-key>
 QUERY_API_KEY = <your-Ollama-api-key>
 ```
