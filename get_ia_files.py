@@ -34,8 +34,10 @@ def main(csv_file_path, number_of_files=None):
         continue
       if number_of_files and current_file >= number_of_files:
         break
-      pdf_url = f"{base_url.replace('details', 'download')}/{row['Barcode']}.pdf"
-      save_path = os.path.join(csv_dir, f"{row['Barcode']}.pdf")
+      # get the barcode from the last part of the base_url
+      barcode = base_url.split("/")[-1]
+      pdf_url = f"{base_url.replace('details', 'download')}/{barcode}.pdf"
+      save_path = os.path.join(csv_dir, f"{barcode}.pdf")
       current_file += 1
       if not os.path.exists(save_path):
         print(f"Downloading file {current_file} of {total_files} at {pdf_url} ...")
